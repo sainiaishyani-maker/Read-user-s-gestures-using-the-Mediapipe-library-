@@ -1,0 +1,14 @@
+# Ignore virtual environments
+rndtask/
+__pycache__/
+
+# Ignore heavy video files
+*.mp4
+
+# Ignore generated sprite folders
+fire_sprites/
+wind_sprites/
+sphere_sprites/
+
+# Ignore Mac system files
+.DS_Store
