@@ -42,7 +42,7 @@ if os.path.exists("jutsu_templates.json"):
 
 # ================================================================
 # We only want to learn the new POINTER sign right now
-SIGNS_TO_LEARN = ["pointer"] 
+SIGNS_TO_LEARN = ["dog"] 
 FRAMES_PER_SIGN = 3  
 # ================================================================
 

@@ -1,39 +1,50 @@
 import cv2
 import os
+import numpy as np
 
-output_folder = "fire_sprites"
-if not os.path.exists(output_folder):
-    os.makedirs(output_folder)
+def extract_sprites(video_path, output_folder, mode="smooth", frame_skip=1, resize_dim=None):
+    """
+    mode: "smooth" for alpha-channel glow, "hard" for binary transparency
+    """
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
 
-cap = cv2.VideoCapture("fire_input.mp4")
-frame_count = 0
-saved_count = 0
+    cap = cv2.VideoCapture(video_path)
+    frame_count = 0
+    saved_count = 0
 
-# CHANGE THIS: 3 means save every 3rd frame, 5 means save every 5th frame.
-# Setting it to 5 will cut 786 frames down to around 150 frames!
-FRAME_SKIP = 5 
+    print(f"--- Processing {video_path} into {output_folder} (Mode: {mode}) ---")
 
-print("Processing video frames with optimization... Please wait.")
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret: break
 
-while cap.isOpened():
-    success, frame = cap.read()
-    if not success:
-        break
+        if frame_count % frame_skip == 0:
+            if resize_dim:
+                frame = cv2.resize(frame, resize_dim)
 
-    # Only process and save the frame if it matches our skip interval
-    if frame_count % FRAME_SKIP == 0:
-        frame = cv2.resize(frame, (250, 250))
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        _, alpha_mask = cv2.threshold(gray, 15, 255, cv2.THRESH_BINARY)
+            bgra = cv2.cvtColor(frame, cv2.COLOR_BGR2BGRA)
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            if mode == "hard":
+                _, alpha = cv2.threshold(gray, 15, 255, cv2.THRESH_BINARY)
+            else: # Smooth mode
+                alpha = cv2.convertScaleAbs(gray, alpha=1.2, beta=-15)
+
+            bgra[:, :, 3] = alpha
+            cv2.imwrite(os.path.join(output_folder, f"sprite_{saved_count:04d}.png"), bgra)
+            saved_count += 1
         
-        b, g, r = cv2.split(frame)
-        bgra_frame = cv2.merge([b, g, r, alpha_mask])
-        
-        # Save with a sequential index
-        cv2.imwrite(os.path.join(output_folder, f"fire_{saved_count:04d}.png"), bgra_frame)
-        saved_count += 1
-        
-    frame_count += 1
+        frame_count += 1
 
-cap.release()
-print(f"Done! Successfully reduced and saved {saved_count} optimized frames inside '{output_folder}'.")
+    cap.release()
+    print(f"Done! Saved {saved_count} frames.")
+
+# --- RUN CONFIGURATION ---
+if __name__ == "__main__":
+    # Fire uses Hard Thresholding and resizing for efficiency
+    extract_sprites("fire_input.mp4", "fire_sprites", mode="hard", frame_skip=5, resize_dim=(250, 250))
+    
+    # Wind and Sphere use Smooth Alpha extraction
+    extract_sprites("wind_input.mp4", "wind_sprites", mode="smooth")
+    extract_sprites("sphere_input.mp4", "sphere_sprites", mode="smooth")

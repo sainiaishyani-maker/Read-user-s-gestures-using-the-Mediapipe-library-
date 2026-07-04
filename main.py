@@ -62,10 +62,12 @@ def extract_fingerprint(hand_landmarks_list):
 
 def match_fingerprint(live_fingerprint):
     if not live_fingerprint or not templates: return None
-    MATCH_THRESHOLD = 1.25  
+    MATCH_THRESHOLD = 1.45  
     best_sign, best_score = None, float('inf')
+
     
     for sign_name, saved_data in templates.items():
+        
         fingerprints_to_check = [saved_data] if isinstance(saved_data[0], float) else saved_data
         for saved_fingerprint in fingerprints_to_check:
             # CRITICAL FIX: Only compares 1-hand poses to 1-hand poses to prevent crashing
@@ -131,10 +133,12 @@ while cap.isOpened():
                         
                         # --- STARTERS & INSTANT CASTS ---
                         if detected_sign == "pointer":
-                            active_combo, sign_history = None, ["pointer"]
+                            if hands_visible == 1:
+                             active_combo, sign_history = None, ["pointer"]
                             fx_active = "sphere"  # Sphere triggers instantly!
                             step_was_valid = True
-                        elif detected_sign == "snake": 
+                          
+                        elif detected_sign == "snake" and active_combo is None: 
                             active_combo, sign_history = "fire", ["snake"]
                             fx_active = None  # Cancels Sphere if it was running
                             step_was_valid = True
@@ -189,37 +193,42 @@ while cap.isOpened():
     if key == 32:  
         sign_history, fx_active, active_combo, last_logged_sign, last_detected_sign = [], None, None, None, None
 
-    # --- HUD ---
-    if fx_rendered_this_frame:
-        if fx_active == "sphere":
-            cv2.putText(frame, "WATER PRISON SPHERE ACTIVE!!", (30, 60), cv2.FONT_HERSHEY_TRIPLEX, 1.0, (255,100,100), 3)
-            cv2.putText(frame, "Cast another Jutsu or press SPACE to cancel", (30, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2)
+    # --- HUD (ONLY DRAWS IF HANDS ARE VISIBLE) ---
+    if hands_visible > 0:
+        if fx_rendered_this_frame:
+            # Draw effects-related text
+            if fx_active == "sphere":
+                cv2.putText(frame, "WATER PRISON SPHERE ACTIVE!!", (30, 60), cv2.FONT_HERSHEY_TRIPLEX, 1.0, (255,100,100), 3)
+                cv2.putText(frame, "Cast another Jutsu or press SPACE to cancel", (30, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2)
+            else:
+                remaining = max(0.0, 10.0 - (time.time() - fx_start_time))
+                name, color = ("KATON: GOUKAKYUU!!", (0,0,255)) if fx_active == "fire" else ("FUTON: DAITOPPA!!", (255,255,0))
+                cv2.putText(frame, name, (30, 60), cv2.FONT_HERSHEY_TRIPLEX, 1.0, color, 3)
+                cv2.putText(frame, f"Time: {remaining:.1f}s", (30, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2)
         else:
-            remaining = max(0.0, 10.0 - (time.time() - fx_start_time))
-            name, color = ("KATON: GOUKAKYUU!!", (0,0,255)) if fx_active == "fire" else ("FUTON: DAITOPPA!!", (255,255,0))
-            cv2.putText(frame, name, (30, 60), cv2.FONT_HERSHEY_TRIPLEX, 1.0, color, 3)
-            cv2.putText(frame, f"Time: {remaining:.1f}s", (30, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2)
-    else:
-        status, color = "Waiting for Jutsu...", (255, 255, 255)
-        if active_combo == "fire":
-            idx = len(sign_history)
-            if idx == 1: status, color = "SNAKE OK -> Waiting: RAM [1/6]", (255, 255, 0)
-            elif idx == 2: status, color = "RAM OK -> Waiting: MONKEY [2/6]", (0, 255, 255)
-            elif idx == 3: status, color = "MONKEY OK -> Waiting: BOAR [3/6]", (0, 165, 255)
-            elif idx == 4: status, color = "BOAR OK -> Waiting: HORSE [4/6]", (0, 69, 255)
-            elif idx == 5: status, color = "HORSE OK -> FORM TIGER! [5/6]", (0, 0, 255)
-        elif active_combo == "wind":
-            if len(sign_history) == 1: status, color = "DOG OK -> Waiting: HORSE [1/3]", (255, 255, 0)
-            else: status, color = "HORSE OK -> FORM BIRD! [2/3]", (255, 255, 0)
-            
-        cv2.putText(frame, status, (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
-        history_text = " -> ".join([s.upper() for s in sign_history])
-        cv2.putText(frame, f"Logged: [{history_text}]", (30, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        diag_sign = detected_sign.upper() if detected_sign else "NONE"
-        box_color = (0, 255, 0) if (detected_sign == last_logged_sign) else (0, 165, 255)
-        if not detected_sign: box_color = (100, 100, 100)
-        cv2.putText(frame, f"Detected: {diag_sign} ({hands_visible} Hand/s)", (30, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 1)
+            # Draw waiting/status text
+            status, color = "Waiting for Jutsu...", (255, 255, 255)
+            if active_combo == "fire":
+                idx = len(sign_history)
+                if idx == 1: status, color = "SNAKE OK -> Waiting: RAM [1/6]", (255, 255, 0)
+                elif idx == 2: status, color = "RAM OK -> Waiting: MONKEY [2/6]", (0, 255, 255)
+                elif idx == 3: status, color = "MONKEY OK -> Waiting: BOAR [3/6]", (0, 165, 255)
+                elif idx == 4: status, color = "BOAR OK -> Waiting: HORSE [4/6]", (0, 69, 255)
+                elif idx == 5: status, color = "HORSE OK -> FORM TIGER! [5/6]", (0, 0, 255)
+            elif active_combo == "wind":
+                if len(sign_history) == 1: status, color = "DOG OK -> Waiting: HORSE [1/3]", (255, 255, 0)
+                else: status, color = "HORSE OK -> FORM BIRD! [2/3]", (255, 255, 0)
+                
+            cv2.putText(frame, status, (30, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
+            history_text = " -> ".join([s.upper() for s in sign_history])
+            cv2.putText(frame, f"Logged: [{history_text}]", (30, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            diag_sign = detected_sign.upper() if detected_sign else "NONE"
+            box_color = (0, 255, 0) if (detected_sign == last_logged_sign) else (0, 165, 255)
+            if not detected_sign: box_color = (100, 100, 100)
+            cv2.putText(frame, f"Detected: {diag_sign} ({hands_visible} Hand/s)", (30, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.5, box_color, 1)
 
+    # Note: When hands_visible is 0, the entire block above is skipped, 
+    # leaving your video feed completely clean.
     cv2.imshow("Data-Driven Jutsu Engine", frame)
     if key == ord('q'): break
 
